@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 import numpy, operator
-from scipy.misc import imresize, imshow
+from scipy.misc import imshow
 from scipy.ndimage.filters import sobel
 from math import *
 from collections import defaultdict
@@ -16,10 +16,12 @@ class Hough:
 	path_points = 51
 	verification_distance = 1.
 	coverage_ratio = 0.9
+	debug = False
 	
-	def __init__(self, image, threshold = 127):
+	def __init__(self, image, threshold = 127, debug = False):
 		self._threshold = threshold
 		self._image = image
+		self._debug = debug
 
 	def _sobel(self):
 		sdy = sobel(self._image, 0)
@@ -44,20 +46,26 @@ class Hough:
 	def _distance(p1, p2):
 		return sqrt((p1[1] - p2[1]) ** 2 + (p1[0] - p2[0]) ** 2)
 
-	def scan(self):
-
-		ellipses = []
+	def _scan(self, resize = None):
 
 		img = self._sobel()
-#		img = imresize(img, 0.25, 'bilinear')
 
-#		imshow(img)
+		if resize is not None: img = resize(img)
+		if self._debug: imshow(img)
 
 		wp = []
 
 		for y in range(0, img.shape[0]):
 			for x in range(0, img.shape[1]):
 				if img[y][x] > self._threshold: wp.append((y,x))
+
+		return wp
+
+
+	def findEllipses(self, resize = None):
+		wp = self._scan(resize)
+
+		ellipses = []
 
 		for y1, x1 in wp:
 			for y2, x2 in wp:
@@ -124,10 +132,10 @@ class Hough:
 				
 				for p in supported: wp.remove(p)
 
-				print data				
 				ellipses.append(data)
 
 		return ellipses
+
 
 if __name__ == "__main__":
 	from sys import argv
@@ -140,4 +148,4 @@ if __name__ == "__main__":
 	if len(argv) < 2:
 		raise Exception("Usage: ./hough atom.jpg");
 	
-	print Hough(imread(argv[1], True)).scan()
+	print Hough(imread(argv[1], True)).findEllipses()
