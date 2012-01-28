@@ -3,11 +3,14 @@
 from sys import argv
 from scipy.misc import imshow, imresize
 from utils import WordSlice, Hough
+from os import getenv,environ
+
 # Hack to run on Scipy > 0.7
 try: from scipy.misc import imread
 except: from scipy.ndimage import imread
 
+debug = getenv("DEBUG", "false").lower() == "true"
 if len(argv) < 2:
 	raise Exception("Usage: ./rebreak image.jpeg");
 for i in WordSlice(imread(argv[1], True)).get_words():
-	print Hough(i, debug = True).findEllipses(lambda img: imresize(img, 0.3, 'bilinear'))
+	print Hough(i, debug = debug).findEllipses(lambda img: imresize(img, 0.3, 'bilinear'))
