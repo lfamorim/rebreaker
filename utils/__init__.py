@@ -1,2 +1,4 @@
-from word_slice import WordSlice
-from hough import Hough 
+__all__ = ["Hough", "WordSlice"]
+
+from hough import *
+from word_slice import *

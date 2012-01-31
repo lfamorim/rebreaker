@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+
+__all__ = ["WordSlice"]
+
 import numpy
 
 class WordSlice:
@@ -18,10 +21,10 @@ class WordSlice:
 	def _scan(self):
 		had_content = False
 
-		for x in range(0, self._image.shape[1]):
+		for x in range(self._image.shape[1]):
 			# This Y line has content?
 			content = False
-			for y in range(0, self._image.shape[0]):
+			for y in range(self._image.shape[0]):
 				if self._image[y][x] < self._threshold: 
 					content = True
 
@@ -38,9 +41,9 @@ class WordSlice:
 			if empty_line == self._separator:
 				self._end_points.append(x)
 				had_content = False
-
-		if had_content:
-			self._end_points.append(size_x)
+		else: 
+			if had_content:
+				self._end_points.append(self.image.shape[0])
 			
 	def get_words(self):
 		
@@ -58,7 +61,7 @@ class WordSlice:
 
 			image = numpy.zeros((self._image.shape[0], end-current_start))
 			for x in range(current_start, end):
-				for y in range(0, self._image.shape[0]):
+				for y in range(self._image.shape[0]):
 					image[y][x-current_start] = self._image[y][x]
 
 			images.append(image)
@@ -75,6 +78,6 @@ if __name__ == "__main__":
 	except: from scipy.ndimage import imread
 
 	if len(argv) < 2:
-		raise Exception("Usage: ./wordslice recaptcha.jpeg");
+		raise Exception("Usage: ./wordslice recaptcha.jpeg")
 	for i in WordSlice(imread(argv[1], True)).get_words():
 		imshow(i)
