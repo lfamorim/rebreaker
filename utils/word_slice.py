@@ -1,18 +1,12 @@
 #!/usr/bin/env python
-
 __all__ = ["WordSlice"]
 
 import numpy
 
 class WordSlice:
 
-	_end_points = []
-	_threshold = 127
-	_separator = 8
-	_image = None
-	_minimum_size = 0
-
 	def __init__(self, image, separator = 8, threshold = 127, minimum_size = 15):
+		self._end_points = []
 		self._image = image
 		self._threshold = threshold
 		self._separator = separator
@@ -45,6 +39,10 @@ class WordSlice:
 			if had_content:
 				self._end_points.append(self.image.shape[0])
 			
+			
+	def __iter__(self):
+		return self.get_words()
+	
 	def get_words(self):
 		
 		self._scan()
@@ -68,14 +66,10 @@ class WordSlice:
 
 		return images
 
-
 if __name__ == "__main__":
 	from sys import argv
 	from scipy.misc import imshow
-	
-	# Hack to run on Scipy > 0.7
-	try: from scipy.misc import imread
-	except: from scipy.ndimage import imread
+	from scipy.ndimage import imread
 
 	if len(argv) < 2:
 		raise Exception("Usage: ./wordslice recaptcha.jpeg")

@@ -8,28 +8,22 @@ from collections import defaultdict
 
 class Hough:
 
-	_image = None 
-	_threshold = 127
-
-	min_major_axis = 7
-	max_major_axis = 35
-	max_b = 10
-	min_b = 7
-
-
-	min_frequency = 10
-
-	path_points = 100
-	verification_distance = 2.
-	coverage_ratio = 0.94
-	
 	def __init__(self, image, threshold = 127):
 		self._threshold = threshold
 		self._image = image
-
-
+		
+		self.min_major_axis = 7
+		self.max_major_axis = 35
+		
+		self.max_b = 10
+		self.min_b = 7
+		
+		self.min_frequency = 10
+		self.path_points = 100
+		self.verification_distance = 2.
+		self.coverage_ratio = 0.94
 	
-	def findEllipses(self, resize = None):
+	def find_ellipses(self, resize = None):
 
 		ellipses = []
 
@@ -111,8 +105,8 @@ class Hough:
 
 		wp = []
 
-		for x in range(img.shape[1]):
-			for y in range(img.shape[0]):
+		for y in range(img.shape[0]):
+			for x in range(img.shape[1]):
 				if img[y][x] > self._threshold: wp.append((y,x))
 
 		return wp, img
@@ -139,9 +133,7 @@ class Hough:
 				support_ratio += 1. / float(self.path_points)
 				break
 	
-		
 		if support_ratio < self.coverage_ratio: return None
-
 
 		supported = uniqify(supported)
 
@@ -164,12 +156,12 @@ def parametric_ellipse(center, a, b, angle, path_points):
 	elx = lambda t: xc + a * cos(t) * cos(angle) - b * sin(t) * sin(angle)
 
 	return [(
-		int(ely(2. * pi * x / float(path_points))),
-		int(elx(2. * pi * x / float(path_points-1)))
+		ely(2. * pi * x / float(path_points)),
+		elx(2. * pi * x / float(path_points-1))
 		) for x in range(path_points)]
 		
-def distance(p1, p2):
-	return sqrt((p1[1] - p2[1]) ** 2 + (p1[0] - p2[0]) ** 2)
+def distance((y, x), (dy, dx)):
+	return sqrt((x - dx) ** 2 + (y - dy) ** 2)
 	
 def cross_mul(a, c, b):
 	d = a * c / b
@@ -188,4 +180,4 @@ if __name__ == "__main__":
 	if len(argv) < 2:
 		raise Exception("Usage: ./hough atom.jpg")
 	
-	Hough(imread(argv[1], True)).findEllipses()
+	Hough(imread(argv[1], True)).find_ellipses()
