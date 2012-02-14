@@ -1,25 +1,27 @@
 #!/usr/bin/env python
 __all__ = ["WordSlice"]
 
-import numpy
-
 class WordSlice:
 
-	def __init__(self, image, separator = 8, threshold = 127, minimum_size = 15):
-		self._end_points = []
-		self._image = image
-		self._threshold = threshold
-		self._separator = separator
-		self._minimum_size = minimum_size
+	def __init__(self, image, separator=8, threshold=127, minimum_size=15):
+		self.image = image
+		self.threshold = threshold
+		self.separator = separator
+		self.minimum_size = minimum_size
+		self.current_start = 0
+		self.end_points = iter(self.scan())
 
-	def _scan(self):
+	def scan(self):
+		end_points = []
 		had_content = False
 
-		for x in range(self._image.shape[1]):
+		height, width = self.image.shape[0:2]
+
+		for x in xrange(width):
 			# This Y line has content?
 			content = False
-			for y in range(self._image.shape[0]):
-				if self._image[y][x] < self._threshold: 
+			for y in range(height):
+				if self.image[y,x] < self.threshold: 
 					content = True
 
 			# If yes, this is not blank.
@@ -32,39 +34,32 @@ class WordSlice:
 				continue
 
 			empty_line += 1
-			if empty_line == self._separator:
-				self._end_points.append(x)
+			if empty_line == self.separator:
+				end_points.append(x)
 				had_content = False
-		else: 
-			if had_content:
-				self._end_points.append(self.image.shape[0])
-			
-			
-	def __iter__(self):
-		return self.get_words()
+
+		if had_content:
+			end_points.append(height)
 	
-	def get_words(self):
+		return end_points
+	
+	def __iter__(self):
+		return self
+	
+	def next(self): #@ReservedAssignment
 		
-		self._scan()
+		data = None
+		while data is None:
 
-		images = []
-		next_start = 0
-
-		for end in self._end_points:
-
-			current_start = next_start
-			next_start = end
-
-			if end-current_start < self._minimum_size: continue
-
-			image = numpy.zeros((self._image.shape[0], end-current_start))
-			for x in range(current_start, end):
-				for y in range(self._image.shape[0]):
-					image[y][x-current_start] = self._image[y][x]
-
-			images.append(image)
-
-		return images
+			end = self.end_points.next()
+			
+			if end - self.current_start > self.minimum_size:
+				data = self.image[:, self.current_start:end]
+			
+			self.current_start = end
+		
+		return data
+			
 
 if __name__ == "__main__":
 	from sys import argv
@@ -73,5 +68,5 @@ if __name__ == "__main__":
 
 	if len(argv) < 2:
 		raise Exception("Usage: ./wordslice recaptcha.jpeg")
-	for i in WordSlice(imread(argv[1], True)).get_words():
+	for i in WordSlice(imread(argv[1], True)):
 		imshow(i)
