@@ -1,252 +1,305 @@
+# -*- coding: utf-8 -*-
 from bresenham import bresenham
-from copy import copy
+from copy import deepcopy
 from random import shuffle
 from itertools import product, chain
-import numpy
+from hough import distance
+import numpy as np
+
 __all__ = ["WormLost"]
 
-class WormLost(object):
+class WormLost:
 
-    def __init__(self, ellipse, image, initial_population=4, max_population=10, threshold=127, step_a=5):
-        
+    def __init__(self, ellipse, image, initial_population=2, max_population=300, threshold=127, step_a=5):
+
         self.max_population = max_population
-        
-        self.worms = []
-        self.worms_out = []
-        self.worms_in = []
-        self.worms_stuck = []
 
-        self._image = image
-        self._ellipse = ellipse
-        self._next_direction = 1
-        self._threshold = threshold
-        
-        self._create_birth_points(step_a)
-        
+        self.next_generation = {}
+        self.worm_eggs = []
+        self.worms = {}
+        self.successful_worms = []
+
+        self.image = image
+        self.ellipse = ellipse
+        self.threshold = threshold
+
+        self.birth_points = iter(self.create_birth_points(step_a))
         self.populate(initial_population)
 
-    def solve(self):
-        while self.worms_in or self.worms_out:
-            self.iterate()
-        
-        for worm in self.worms:
-            imshow(worm.image_colorize())
+        self.callback_preferred = [self.same_radius]
+        self.callback_candidates = [self.on_image, self.not_taked, self.border_limit]
+        self.callback_point = [self.inside_ellipse]
+
+        self.worm_key = 0
+
+    def same_radius(self, worm, candidates={}):
+        candidates = {}
+        if not worm.in_points: return
+        rd = distance(worm.in_points[-1], self.ellipse[0]) # Reference Distance
+        for k, p in candidates.iteritems():
+            rp = distance(p, self.ellipse[0])
+            worm[k] = -abs(rp - rd)
+
+
+    def border_limit(self, worm, (y, x)):
+        pt = self.image[y, x] < self.threshold
+        data = False
+        for p in chain(product((y,), (x + 1, x - 1)),
+                          product((y + 1, y - 1), (x,))):
+
+            if worm.in_points:
+                if p == worm.in_points[-1]: continue
+                elif p in worm.in_points: return False
+            tt = self.image[p] < self.threshold
+            if tt != pt: data = True
+
+        return data
+
+    def not_taked(self, worm, p):
+        for test in chain(self.worms.values(), self.successful_worms):
+            if p in test.in_points: return False
+        return True
+
+    def inside_ellipse(self, worm, p):
+
+        d = distance(self.ellipse[0], p)
+
+        minor = min(self.ellipse[1:3]) * .8
+        if d < minor * .8: raise WormException, "limit exceeded: min %d < %d" % (d, minor)
+
+        maximum = max(self.ellipse[1:3]) * 1.2
+        if d > maximum: raise WormException, "limit exceeded: min %d < %d" % (d, maximum)
+
+    def on_image(self, worm, (y, x)):
+        if x < 0 or y < 0: return False
+        height, width = self.image.shape
+        if y > height or x > width: return False
+        return True
+
+    def mature(self, k, worms):
+        if not self.next_generation[k]: return
+        worms[k] = self.next_generation[k][0]
+        self.next_generation[k].pop(0)
+
+
+    def next_worm(self):
+        worms = {}
+
+        for key, worm in self.worms.iteritems():
+            try:
+                print "W%d: exec" % key
+                worm.next()
+                worms[key] = worm
+            except StopIteration:
+                print "W%d: Debugging" % key
+                self.successful_worms.append(worm)
+            except WormException, e:
+                print "W%d: %s" % (key, e)
+                self.next_generation[key] += worm.children
+                self.mature(key, worms)
+
+        self.worms = worms
+
+    def worm_debug(self, worm, points=[]):
+        image = image_colorize(self.image, self.threshold)
+        for p in worm.in_points: image[p] = (0, 255, 0)
+        for p in points: image[p] = (127, 127, 0)
+        print "Debugging %s" % worm.name
+        imshow(image)
+
+    def next_worm_egg(self):
+        worm_eggs = []
+
+        for index, worm_egg in enumerate(self.worm_eggs):
+            try:
+                worm_egg.next()
+                worm_eggs.append(worm_egg)
+            except StopIteration:
+                self.worms[self.worm_key] = worm_egg.get_worm()
+                self.next_generation[self.worm_key] = []
+                self.worm_key += 1
+            except WormException, e:
+                print "E%d: %s" % (index, e)
+
+        self.worm_eggs = worm_eggs
+
+    def next(self): #@ReservedAssignment
+        if not self.worms and not self.worm_eggs: raise StopIteration
+        self.next_worm_egg()
+        self.next_worm()
 
     def populate(self, total):
-        for i in xrange(total): self.inicialize_worm()
-                
-    def _create_birth_points(self, step_a):
-        
-        y, x = self._ellipse[0]
-        a, b = self._ellipse[1:3]
-        
+        total = min(total, self.max_population - (len(self.worm_eggs) + len(self.worms)))
+        while total:
+
+            try: self.worm_eggs.append(WormEgg(self, next(self.birth_points)))
+            except StopIteration: break
+
+            total -= 1
+
+        return total
+
+    def create_birth_points(self, step_a):
+
+        y, x = self.ellipse[0]
+        a, b = self.ellipse[1:3]
+
         b += 5
-        
-        lowy = int(y - b)
-        if lowy < 0: lowy = 0
+        miny = max(int(y - b), 0)
+        maxy = min(int(y + b), self.image.shape[0])
 
-        highy = int(y + b)
-        if highy > self._image.shape[0]: highy = self._image.shape[0]
-        
-        
-        range_a = range(int(x - a), int(x + a) + 1, step_a)
-        range_a = product((lowy, highy), range_a)
-        birth_points = [v for v in range_a]
+        birth_points = list(product((miny, maxy), xrange(int(x - a), int(x + a) + 1, step_a)))
+
         shuffle(birth_points)
-        
-        
-        self._birth_points = iter(birth_points)
 
-    def _inicialize_worm(self):
-        # Check population size
-        if len(self.worms) == self.max_population:
-            raise WormException, "Maximum population reached"
+        return birth_points
 
-        # Get birth point
-        try: point_birth = next(self._birth_points)
-        except StopIteration:
-            raise WormException("No more birthday points") 
-        
-        #Create Worm
-        worm = Worm(self, self._next_direction, point_birth, self._ellipse, self._image, self._threshold)
-        return worm
+    def __iter__(self):
+        return self
 
-    def inicialize_worm(self):
-        # Check population size
-        if len(self.worms) == self.max_population:
-            raise WormException, "Maximum population reached"
+    def solve(self):
+        for i in self: pass
 
-        while True:
-            try:
-                worm = self._inicialize_worm()
-                self.worms.append(worm)
-                self.worms_out.append(worm)
-                self._next_direction *= -1
-                break
-            except PointException: pass
-        
+class WormEgg:
 
-    def validate_in(self, worm, index, candidates):
-        for candidate in copy(candidates):
-            for worm in self.worms:
-                if candidate in worm.in_points:
-                    candidates.remove(candidate)
-
-    def _iterate_in(self):
-        for worm in copy(self.worms_in):
-            try:
-                worm.iterate_in(self.validate_in)
-            except StopIteration:
-                self.worms_in.remove(worm)
-                self.worms_stuck.append(worm)
-            except WormException:
-                self.worms_in.remove(worm)
-                self.worms.remove(worm)
-
-
-    def iterate_out(self):
-        for worm in copy(self.worms_out):
-            try:
-                worm.iterate_out()
-            except StopIteration:
-                self.worms_out.remove(worm)
-                self.worms_in.append(worm)
-            except WormException:
-                self.worms_out.remove(worm)
-                self.worms.remove(worm)
- 
-    def iterate(self):
-        self._iterate_in()
-        self.iterate_out()
-            
-class Worm:    
-                
-    def __init__(self, worm_lost, direction, birth_point, ellipse, image, threshold=127):
-        
-        self._worm_lost = worm_lost
-        self._image = image
-        self._threshold = threshold
-        
-        if self.threshold_test(birth_point): raise PointException
-
-        self.in_points = []
-        self.out_points = [birth_point]
-        self.key_points = [birth_point]
-
-        self._direction = direction
-        self._ellipse = ellipse
-        self._stuck = {-1 : False, 1:  False}
-        self._center_line = bresenham(birth_point, ellipse[0])
-        
-        
-    def stuck(self):
-        self._stuck[self._direction] = True
-
-    def image_colorize(self, imc=None):
-        
-        if imc == None: imc = image_colorize(self._image)
-        
-        for y, x in self.in_points: imc[y][x] = (255, 0, 0)
-        for y, x in self.out_points: imc[y][x] = (0, 255, 0) 
-        for y, x in self.key_points: imc[y][x] = (0, 0, 255)
-        
-        return imc
-        
-
-    def stuck_action(self, interact=None):
-        self.stuck()
-        self.change_direction()
-        return self.iterate_in(interact)
+    def __init__(self, worm_lost, birth_point, name=None):
+        self.worm_lost = worm_lost
+        self.birth_point = birth_point
+        self.center_line = iter(bresenham(birth_point, worm_lost.ellipse[0])) # Create line
+        self.name = name
 
     def threshold_test(self, (y, x)):
-        return self._image[y][x] < self._threshold
+        return threshold_test(self.worm_lost.image, (y, x), self.worm_lost.threshold)
 
-    def _is_out_of_limit(self, (y, x)):
-        
-        if y < 0 or x < 0: return True
+    def __iter__(self):
+        self.next()
 
-        my, mx = self._image.shape
-        
-        if y >= my or x >= mx: return True
+    def get_worm(self):
+        return Worm(self.worm_lost, [self.start_point], name=self.name)
 
-        return False
-    
-    def is_border_limit(self, p, plast):
-        y, x = p
-        pthreshold = self.threshold_test(p)
-                
-        for ptest in chain(product((y,), (x + 1, x - 1)),
-                           product((y + 1, y - 1), (x,))):
+    def next(self): #@ReservedAssignment
+        try: p = self.center_line.next()
+        except StopIteration: raise WormException
 
-            if self._is_out_of_limit(ptest): continue
-            elif ptest == plast: continue
-            elif self.threshold_test(ptest) != pthreshold: return True
-        return False
-    
-    def iterate_out(self, interact=None):
-        
-        p = self._center_line.next()
-            
-        if p == None: raise Exception, "Just the way"
+        if not self.threshold_test(p): return
 
-        if not self.threshold_test(p):
-            self.out_points.append(p)
-            return
-
-        if interact is not None: interact(self, p)
-
-        self.key_points.append(p)
-        self.in_points.append(p)
-        
+        self.start_point = p
         raise StopIteration
 
-    def iterate_in(self, interact=None):
-                
-        if self._stuck[self._direction] == True: raise StopIteration
-        
-        y, x = p = self.in_points[-1]
-        
-        candidates = [v for v in product((y + 1, y, y - 1), (x + 1, x, x - 1))]
-        candidates.remove(p)
+class Worm:
 
-        for candidate in copy(candidates):
-            if self._is_out_of_limit(candidate):
-                candidates.remove(candidate)
-            elif not self.is_border_limit(candidate, p):
-                candidates.remove(candidate)
-            elif candidate in self.in_points:
-                candidates.remove(candidate)
-        
-        index_direction = int((self._direction * 0.5) - 0.5)
-        if interact != None: interact(self, index_direction, candidates)
-        
-        if not candidates: return self.stuck_action(interact)
-        self.in_points.append(candidates[index_direction])
-        
+    def __init__(self, worm_lost, candidates, in_points=[], name=None):
 
-    def change_direction(self):
-        self.in_points.append(self.key_points[-1])
-        self.key_points.append(self.in_points[-2])
-        self._direction *= -1
-            
-def image_colorize(image):
-    colorized = numpy.zeros((image.shape[0], image.shape[1], 3))
-    for y in range(image.shape[0]): 
-        for x in range(image.shape[1]):
-            colorized[y][x] = [image[y][x]] * 3
+        self.worm_lost = worm_lost
+        self.name = name
+
+        self.children = []
+        self.in_points = in_points
+
+        self.callback_candidates = []
+        self.callback_preferred = []
+        self.callback_point = []
+        self.candidates = candidates
+
+    def child(self):
+        #self.worm_lost.worm_debug(self)
+        return Worm(self.worm_lost, deepcopy(self.candidates), deepcopy(self.in_points), name=self.name)
+
+
+    def valid_image_point(self, (y, x)):
+
+        if y < 0 or x < 0:
+            return False
+
+        height, width = self.worm_lost.image.shape[0:2]
+
+        if y > height or x > width:
+            return False
+
+        return True
+
+    def store_child(self):
+        if not self.candidates: return
+        self.children.append(self.child())
+
+    def validate_candidate(self, vp):
+        for validate in chain(self.callback_candidates, self.worm_lost.callback_candidates):
+            if not validate(self, vp): return False
+        return True
+
+    def validate_candidates(self):
+        passed = []
+        for candidate in self.candidates:
+            if self.validate_candidate(candidate):
+                passed.append(candidate)
+        self.candidates = passed
+
+    def generate_candidates(self):
+        y, x = self.in_points[-1]
+        # make a cube
+        return chain(product((y + 1, y - 1), (x + 1, x, x - 1)),
+              product((y,), (x + 1, x - 1)))
+
+    def preferred_direction(self):
+
+        candidates = {}
+        for k in self.candidates: candidates[k] = 0
+
+        for fnc_importance in chain(self.callback_preferred,
+                                    self.worm_lost.callback_preferred):
+            fnc_importance(self, candidates)
+
+        sorted(candidates, key=lambda (k, v):(v, k), reverse=True)
+        self.candidates = candidates.keys()
+
+    def run(self):
+        self.validate_candidates()
+        len_candidates = len(self.candidates)
+
+        if not len_candidates: raise StopIteration
+        if len_candidates > 1: self.preferred_direction()
+
+        p = self.candidates[0]
+        self.candidates.pop(0)
+
+        self.store_child()
+        self.run_at(p)
+
+    def run_at(self, p):
+        for validate in chain(self.callback_point, self.worm_lost.callback_point):
+            validate(self, p)
+        self.in_points.append(p)
+
+    def __iter__(self):
+        self.next()
+
+    def next(self): #@ReservedAssignment
+        self.run()
+        self.candidates = self.generate_candidates()
+
+
+def image_colorize(image, treshold=127):
+    colorized = np.zeros(list(image.shape[0:2]) + [3])
+    for y, x in product(*[xrange(x) for x in image.shape[0:2]]):
+        colorized[y, x] = [(image[y, x] > treshold) * 255] * 3
     return colorized
 
+def threshold_test(image, (y, x), threshold):
+    return image[y, x] < threshold
+
 class WormException(Exception): pass
-class PointException(WormException): pass
 
 if __name__ == "__main__":
     import json
     from sys import argv
     from scipy.misc import imshow
     from scipy.ndimage import imread
-    
 
     if len(argv) < 3:
         raise Exception("Usage: ./worm_lost recaptcha.jpeg ellipse_json")
-    
-    print WormLost(json.loads(argv[2]), imread(argv[1], True)).solve()
+    reimage = imread(argv[1], True)
+    a = WormLost(json.loads(argv[2]), reimage)
+    imshow(image_colorize(reimage))
+    a.solve()
+    for worm in a.successful_worms:
+        a.worm_debug(worm)

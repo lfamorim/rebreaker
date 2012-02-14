@@ -44,7 +44,6 @@ def bresenham(p0, p1):
             error -= 1.0
         x += 1
     
-    
     if swap_direction: points.reverse()
 
-    return iter(points)
+    return points
