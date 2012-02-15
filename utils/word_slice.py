@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 __all__ = ["WordSlice"]
 
 class WordSlice:
@@ -58,14 +57,3 @@ class WordSlice:
             self.current_start = end
 
         return data
-
-if __name__ == "__main__":
-    from sys import argv
-    from scipy.misc import imshow
-    from scipy.ndimage import imread
-
-    if len(argv) < 2:
-        raise Exception("Usage: ./wordslice recaptcha.jpeg")
-
-    for i in WordSlice(imread(argv[1], True)):
-        imshow(i)

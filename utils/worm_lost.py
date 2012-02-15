@@ -1,16 +1,16 @@
-# -*- coding: utf-8 -*-
 from bresenham import bresenham
 from copy import deepcopy
 from random import shuffle
 from itertools import product, chain
 from hough import distance
 import numpy as np
+from scipy.misc import imshow #@UnresolvedImport
 
 __all__ = ["WormLost"]
 
 class WormLost:
 
-    def __init__(self, ellipse, image, initial_population=2, max_population=300, threshold=127, step_a=5):
+    def __init__(self, ellipse, image, initial_population=3, max_population=300, threshold=127, step_a=5):
 
         self.max_population = max_population
 
@@ -68,7 +68,7 @@ class WormLost:
         if d < minor * .8: raise WormException, "limit exceeded: min %d < %d" % (d, minor)
 
         maximum = max(self.ellipse[1:3]) * 1.2
-        if d > maximum: raise WormException, "limit exceeded: min %d < %d" % (d, maximum)
+        if d > maximum: raise WormException, "limit exceeded: max %d > %d" % (d, maximum)
 
     def on_image(self, worm, (y, x)):
         if x < 0 or y < 0: return False
@@ -158,7 +158,7 @@ class WormLost:
         return self
 
     def solve(self):
-        for i in self: pass
+        for i in self: pass #@UnusedVariable
 
 class WormEgg:
 
@@ -169,7 +169,7 @@ class WormEgg:
         self.name = name
 
     def threshold_test(self, (y, x)):
-        return threshold_test(self.worm_lost.image, (y, x), self.worm_lost.threshold)
+        return self.worm_lost.image[y, x] < self.worm_lost.threshold
 
     def __iter__(self):
         self.next()
@@ -284,22 +284,4 @@ def image_colorize(image, treshold=127):
         colorized[y, x] = [(image[y, x] > treshold) * 255] * 3
     return colorized
 
-def threshold_test(image, (y, x), threshold):
-    return image[y, x] < threshold
-
 class WormException(Exception): pass
-
-if __name__ == "__main__":
-    import json
-    from sys import argv
-    from scipy.misc import imshow
-    from scipy.ndimage import imread
-
-    if len(argv) < 3:
-        raise Exception("Usage: ./worm_lost recaptcha.jpeg ellipse_json")
-    reimage = imread(argv[1], True)
-    a = WormLost(json.loads(argv[2]), reimage)
-    imshow(image_colorize(reimage))
-    a.solve()
-    for worm in a.successful_worms:
-        a.worm_debug(worm)

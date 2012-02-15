@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 __all__ = ["Hough"]
 
 from scipy.ndimage.filters import sobel, generic_gradient_magnitude
@@ -160,18 +158,3 @@ def distance((y, x), (dy, dx)):
 def cross_mul(a, c, b):
     d = a * c / b
     return d
-
-def uniqify(seq):
-    keys = {}
-    for e in seq:
-        keys[e] = 1
-    return keys.keys()
-
-if __name__ == "__main__":
-    from sys import argv
-    from scipy.ndimage import imread
-
-    if len(argv) < 2:
-        raise Exception("Usage: ./hough atom.jpg")
-
-    Hough(imread(argv[1], True)).find_ellipses()
