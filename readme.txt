@@ -33,7 +33,7 @@
  .   .       .      :  .   .: ::/  .  .::\
 
 
- ~> Extremely advanced algorithm to remove distortions from recaptcha images, allowing OCR.
+ ~> Extremely advanced algorithm to remove """OLD""" distortions from recaptcha images, allowing OCR.
 
  ~> version: 0.1 jupiter
  ~> dependencies: scipy 0.10 ~ python 2.6
